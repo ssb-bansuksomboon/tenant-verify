@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ห้องว่าง · บ้านสุขสมบูรณ์ (SSB)</title>
+<script src="config.js"></script>
+<style>
+  :root { --fg:#111; --muted:#555; --line:#ddd; --bg:#fff; --accent:#06c755; --soft:#f4f7f5; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,"Sarabun","Noto Sans Thai",sans-serif; color:var(--fg); background:var(--bg); }
+  main { max-width:480px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:17px; margin:22px 0 8px; }
+  p.sub { color:var(--muted); margin:0 0 16px; font-size:14px; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .room { font-size:18px; font-weight:700; } .meta { font-size:13px; color:var(--muted); }
+  .tag { font-size:13px; padding:4px 8px; border-radius:999px; background:var(--soft); white-space:nowrap; }
+  .now .tag { background:#e3f8ea; color:#05793a; font-weight:700; }
+  table { width:100%; border-collapse:collapse; font-size:15px; } td { padding:7px 4px; border-bottom:1px solid var(--line); } td:last-child { text-align:right; font-weight:700; }
+  .empty { color:var(--muted); font-size:14px; padding:8px 0; }
+  .cta { display:block; text-align:center; text-decoration:none; padding:14px; border-radius:10px; font-size:17px; margin-top:10px; }
+  .cta.line { background:var(--accent); color:#fff; } .cta.tel { border:1px solid var(--line); color:var(--fg); }
+  footer { margin-top:24px; font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ห้องว่าง บ้านสุขสมบูรณ์</h1>
+  <p class="sub">SSB · ถ.พิทักษ์ชาติ ใกล้ รพ.ประจวบคีรีขันธ์ · LINE @276orarq</p>
+
+  <h2>ว่างตอนนี้</h2><div id="now"><div class="empty">กำลังโหลด…</div></div>
+  <h2>จะว่างเร็ว ๆ นี้</h2><div id="soon"></div>
+  <h2>กำลังปรับปรุง (สอบถามได้)</h2><div id="reno"></div>
+
+  <h2>ราคาห้องพัก (ต่อเดือน)</h2>
+  <table>
+    <tr><td>ห้องแอร์ · พัก 6 เดือนขึ้นไป</td><td>4,500 บาท</td></tr>
+    <tr><td>ห้องแอร์ · พักน้อยกว่า 6 เดือน</td><td>5,000 บาท</td></tr>
+    <tr><td>ห้องพัดลม · พัก 6 เดือนขึ้นไป</td><td>3,000 บาท</td></tr>
+    <tr><td>ห้องพัดลม · พักน้อยกว่า 6 เดือน</td><td>3,500 บาท</td></tr>
+    <tr><td>เงินมัดจำ (ทั้ง 2 ประเภท)</td><td>4,000 บาท</td></tr>
+    <tr><td>ค่าน้ำ</td><td>28 บาท/หน่วย</td></tr>
+    <tr><td>ค่าไฟ (ห้องแอร์ขั้นต่ำ 200 บาท/เดือน)</td><td>7 บาท/หน่วย</td></tr>
+  </table>
+
+  <a class="cta line" href="https://line.me/R/oaMessage/@276orarq/?%E0%B8%AA%E0%B8%99%E0%B9%83%E0%B8%88%E0%B8%88%E0%B8%AD%E0%B8%87%E0%B8%AB%E0%B9%89%E0%B8%AD%E0%B8%87">สนใจจอง / นัดดูห้อง ทาง LINE</a>
+  <a class="cta tel" href="tel:0817337699">โทร 081-733-7699</a>
+  <a class="cta tel" href="https://maps.app.goo.gl/mhzh5dBJyvTUxKkw6">แผนที่</a>
+
+  <footer id="foot">ข้อมูลห้องว่างอัปเดตจากระบบของหอพัก · ราคาและห้องว่างอาจเปลี่ยนแปลง กรุณายืนยันกับเจ้าหน้าที่ก่อนโอนเงิน</footer>
+</main>
+<script>
+  const typeName = { air: 'ห้องแอร์', fan: 'ห้องพัดลม' };
+  const thDate = (s) => s ? new Date(s + 'T00:00:00+07:00').toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '';
+  function card(r) {
+    const d = document.createElement('div'); d.className = 'card ' + r.state;
+    let when = r.state === 'now' ? 'ว่างแล้ว' : r.state === 'soon' ? 'ว่าง ' + thDate(r.from) : 'สอบถาม';
+    if (r.until) when += ' – ' + thDate(r.until);
+    d.innerHTML = '<div><div class="room"></div><div class="meta"></div></div><div class="tag"></div>';
+    d.querySelector('.room').textContent = r.room;
+    d.querySelector('.meta').textContent = typeName[r.type] + (r.small ? ' · ห้องเล็ก' : '');
+    d.querySelector('.tag').textContent = when;
+    return d;
+  }
+  function fill(id, list) {
+    const el = document.getElementById(id); el.innerHTML = '';
+    if (!list.length) { el.innerHTML = '<div class="empty">ไม่มีในขณะนี้</div>'; return; }
+    list.forEach((r) => el.appendChild(card(r)));
+  }
+  fetch(window.SSB_CONFIG.GATEWAY_URL + '?action=availability')
+    .then((r) => r.json())
+    .then((j) => {
+      if (!j.ok) throw new Error('bad');
+      const rooms = j.rooms || [];
+      fill('now', rooms.filter((r) => r.state === 'now'));
+      fill('soon', rooms.filter((r) => r.state === 'soon').sort((a, b) => a.from.localeCompare(b.from)));
+      fill('reno', rooms.filter((r) => r.state === 'reno'));
+      document.getElementById('foot').textContent = 'อัปเดตล่าสุด ' + j.asOf + ' น. · ราคาและห้องว่างอาจเปลี่ยนแปลง กรุณายืนยันกับเจ้าหน้าที่ก่อนโอนเงิน';
+    })
+    .catch(() => { document.getElementById('now').innerHTML = '<div class="empty">โหลดข้อมูลไม่สำเร็จ กรุณาทัก LINE @276orarq หรือโทร 081-733-7699</div>'; });
+</script>
+</body>
+</html>
