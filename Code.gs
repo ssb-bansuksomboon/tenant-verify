@@ -207,9 +207,12 @@ var GW = (function () {
 
 function P_(k, d) { var v = PropertiesService.getScriptProperties().getProperty(k); return v == null ? d : v; }
 
-function doGet() {
-  return ContentService.createTextOutput(JSON.stringify({ ok: true, service: 'SSB LINE gateway', version: '1.0' }))
-    .setMimeType(ContentService.MimeType.JSON);
+function doGet(e) {
+  var out = { ok: true, service: 'SSB LINE gateway', version: '1.1' };
+  if (e && e.parameter && e.parameter.action === 'availability') {
+    try { out = availability_(); } catch (err) { console.error(err); out = { ok: false, code: 'SERVER_ERROR' }; }
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
 /** LIFF page posts text/plain JSON (avoids CORS preflight): {action, idToken, room, email, otp} */
@@ -392,3 +395,46 @@ function installDailyRevocation() {
 
 /** Owner manual revoke, e.g. revokeRoomManual('A101'). */
 function revokeRoomManual(room) { Logger.log(GW.revokeRoom(buildDeps_(), room, 'owner_manual') ? 'revoked ' + room : 'no active binding for ' + room); }
+
+// ---------------------------------------------------------------- SSB one-click setup (run in this order from the Run menu)
+/** Step 1: run setupGatewaySheet (creates the private data sheet). */
+/** Step 2: create the tenant rich menu with the SSB image + LIFF link. */
+function step2_setupTenantRichMenuSSB() { setupTenantRichMenu('1WuXbvqjXb6I9bFO9lugz7i9WtGkCFcDp', 'https://liff.line.me/2012636052-SHKZSKR5'); }
+/** Step 3: run installDailyRevocation. */
+
+
+// ---------------------------------------------------------------- public room availability (no personal data)
+/**
+ * GET <web app>?action=availability → { ok, asOf, rooms:[{room, type, from, until, state}] }
+ * Reads ROOM / STATUS / CHECKOUT_DATE / NEXT_BOOKING / NOTE from the registry tab.
+ * NEVER returns EMAIL or any tenant data.
+ *  state = 'now'    STATUS VACANT (not under renovation)
+ *          'soon'   ACTIVE with CHECKOUT_DATE within AVAIL_WINDOW_DAYS
+ *          'reno'   VACANT and NOTE contains ปรับปรุง
+ *  until = day before NEXT_BOOKING (if a later booking already exists)
+ */
+var AVAIL_WINDOW_DAYS = 60;
+function availability_() {
+  var sh = SpreadsheetApp.openById(P_('REGISTRY_SHEET_ID')).getSheetByName(P_('REGISTRY_TAB', 'LINE_ACCESS'));
+  var v = sh.getDataRange().getValues();
+  var h = v[0].map(function (x) { return String(x).trim().toUpperCase(); });
+  var iR = h.indexOf('ROOM'), iS = h.indexOf('STATUS'), iC = h.indexOf('CHECKOUT_DATE'), iB = h.indexOf('NEXT_BOOKING'), iN = h.indexOf('NOTE');
+  var now = new Date(), tz = 'Asia/Bangkok', out = [];
+  function d(x) { if (!x) return null; var t = x instanceof Date ? x : new Date(x); return isNaN(t) ? null : t; }
+  function fmt(t) { return t ? Utilities.formatDate(t, tz, 'yyyy-MM-dd') : ''; }
+  for (var i = 1; i < v.length; i++) {
+    var room = GW._normRoom(v[i][iR]); if (!room) continue;
+    var status = String(v[i][iS] || '').toUpperCase(), note = iN >= 0 ? String(v[i][iN] || '') : '';
+    var co = iC >= 0 ? d(v[i][iC]) : null, nb = iB >= 0 ? d(v[i][iB]) : null;
+    var type = room.charAt(0) === 'A' ? 'air' : 'fan';
+    var small = room === 'A110' || room === 'A121';
+    var until = nb ? new Date(nb.getTime() - 86400e3) : null, rec = null;
+    if (status === 'VACANT') rec = { state: /ปรับปรุง/.test(note) ? 'reno' : 'now', from: fmt(now) };
+    else if (status === 'ACTIVE' && co && co.getTime() - now.getTime() <= AVAIL_WINDOW_DAYS * 86400e3) rec = { state: 'soon', from: fmt(new Date(co.getTime() + 86400e3)) };   // free from the day after check-out
+    if (!rec) continue;
+    if (until && rec.from && until.getTime() < new Date(rec.from).getTime()) continue;   // already re-booked from check-out day
+    rec.room = room; rec.type = type; rec.small = small; rec.until = fmt(until);
+    out.push(rec);
+  }
+  return { ok: true, asOf: Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm'), rooms: out };
+}
