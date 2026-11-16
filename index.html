@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ยืนยันผู้เช่า · บ้านสุขสมบูรณ์</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="config.js"></script>
+<style>
+  :root { --fg:#111; --muted:#555; --line:#ccc; --bg:#fff; --accent:#06c755; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Sarabun", "Noto Sans Thai", sans-serif; color:var(--fg); background:var(--bg); }
+  main { max-width: 440px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  label { display:block; font-size:14px; margin: 14px 0 6px; }
+  input { width:100%; font-size:18px; padding:12px; border:1px solid var(--line); border-radius:8px; }
+  button { width:100%; margin-top:18px; padding:14px; font-size:17px; border:0; border-radius:8px; background:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; }
+  .msg { margin-top:16px; padding:12px; border-radius:8px; background:#f3f3f3; font-size:15px; white-space:pre-line; }
+  .ok { background:#e8f8ee; } .err { background:#fdecec; }
+  .hidden { display:none; }
+  footer, .msg { overflow-wrap:anywhere; }
+  html, body { overflow-x:hidden; }
+  footer { margin-top:28px; font-size:13px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>ยืนยันตัวตนผู้เช่า</h1>
+  <p class="sub">บ้านสุขสมบูรณ์ (SSB) · LINE @276orarq<br>ห้องละ 1 บัญชี LINE (ผู้เช่าหลัก)</p>
+
+  <section id="step1">
+    <label for="room">เลขห้อง</label>
+    <input id="room" inputmode="text" autocomplete="off" placeholder="เช่น A101 หรือ F203" maxlength="6">
+    <label for="email">อีเมลที่ลงทะเบียนไว้กับหอพัก</label>
+    <input id="email" type="email" autocomplete="email" placeholder="name@example.com">
+    <button id="btnReq">ขอรหัสยืนยันทางอีเมล</button>
+  </section>
+
+  <section id="step2" class="hidden">
+    <label for="otp">รหัส 6 หลักจากอีเมล</label>
+    <input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">
+    <button id="btnVer">ยืนยัน</button>
+    <button id="btnBack" style="background:#888">ขอรหัสใหม่ / แก้ไขข้อมูล</button>
+  </section>
+
+  <section id="done" class="hidden"></section>
+  <div id="msg" class="msg hidden"></div>
+
+  <footer>ไม่ได้รับอีเมล หรืออีเมลไม่ตรงกับที่ลงทะเบียน กรุณาติดต่อฝ่ายบริหาร โทร 081-733-7699<br>
+  ระบบนี้ไม่ขอเลขบัตรประชาชน และจะไม่แสดงข้อมูลส่วนตัวของผู้เช่า</footer>
+</main>
+<script>
+  // Values come from config.js (not secret).
+  const LIFF_ID = window.SSB_CONFIG.LIFF_ID;
+  const GATEWAY_URL = window.SSB_CONFIG.GATEWAY_URL;
+
+  const $ = (id) => document.getElementById(id);
+  function show(text, kind) { const m = $('msg'); m.textContent = text; m.className = 'msg ' + (kind || ''); }
+  async function call(action, extra) {
+    const idToken = liff.getIDToken();
+    const res = await fetch(GATEWAY_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ action, idToken }, extra)) });
+    return res.json();
+  }
+  function done(room) {
+    ['step1', 'step2'].forEach((s) => $(s).classList.add('hidden'));
+    const d = $('done'); d.classList.remove('hidden');
+    d.innerHTML = '<div class="msg ok">ยืนยันแล้ว: ห้อง <b></b><br>เมนูผู้เช่าแสดงในแชท LINE @276orarq แล้ว</div>' +
+      '<button id="btnClose">กลับไปที่แชท</button>';
+    d.querySelector('b').textContent = room;
+    $('btnClose').onclick = () => liff.closeWindow();
+  }
+
+  (async () => {
+    try {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) { liff.login(); return; }
+      const st = await call('status', {});
+      if (st.verified) done(st.room);
+    } catch (e) { show('เปิดหน้านี้จากเมนู "ผู้เช่าปัจจุบัน" ใน LINE @276orarq', 'err'); }
+  })();
+
+  $('btnReq').onclick = async () => {
+    const room = $('room').value.trim().toUpperCase(), email = $('email').value.trim();
+    $('btnReq').disabled = true;
+    try {
+      const r = await call('requestOtp', { room, email });
+      show(r.message, r.ok ? 'ok' : 'err');
+      if (r.ok) { $('step1').classList.add('hidden'); $('step2').classList.remove('hidden'); $('otp').focus(); }
+    } catch (e) { show('เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่', 'err'); }
+    $('btnReq').disabled = false;
+  };
+  $('btnVer').onclick = async () => {
+    $('btnVer').disabled = true;
+    try {
+      const r = await call('verifyOtp', { room: $('room').value.trim().toUpperCase(), otp: $('otp').value.trim() });
+      if (r.ok) { show('', ''); $('msg').classList.add('hidden'); done(r.room); }
+      else {
+        show(r.message + (r.attemptsLeft ? '\nเหลือ ' + r.attemptsLeft + ' ครั้ง' : ''), 'err');
+        if (['EXPIRED', 'LOCKED', 'NO_OTP'].includes(r.code)) { $('step2').classList.add('hidden'); $('step1').classList.remove('hidden'); }
+      }
+    } catch (e) { show('เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่', 'err'); }
+    $('btnVer').disabled = false;
+  };
+  $('btnBack').onclick = () => { $('step2').classList.add('hidden'); $('step1').classList.remove('hidden'); $('msg').classList.add('hidden'); };
+</script>
+</body>
+</html>
